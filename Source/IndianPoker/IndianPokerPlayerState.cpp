@@ -2,6 +2,7 @@
 
 
 #include "IndianPokerPlayerState.h"
+#include "Net/UnrealNetwork.h"
 
 AIndianPokerPlayerState::AIndianPokerPlayerState()
 {
@@ -11,4 +12,17 @@ AIndianPokerPlayerState::AIndianPokerPlayerState()
 	// PlayerState is automatically set to replicate by default, but ensuring it here is good practice.
 	bReplicates = true;
 	SetReplicatingMovement(false); // We don't need to replicate movement for PlayerState
+	
+	CurrentBattleState = EBattleState::Lobby;
+}
+
+void AIndianPokerPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(AIndianPokerPlayerState, CurrentBattleState);
+}
+
+void AIndianPokerPlayerState::OnRep_BattleState()
+{
 }

@@ -3,6 +3,7 @@
 #include "IndianPokerGameMode.h"
 #include "IndianPokerCharacter.h"
 #include "IndianPokerPlayerState.h"
+#include "IndianPokerPlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
@@ -17,6 +18,7 @@ AIndianPokerGameMode::AIndianPokerGameMode()
 	}
 
 	PlayerStateClass = AIndianPokerPlayerState::StaticClass();
+	PlayerControllerClass = AIndianPokerPlayerController::StaticClass();
 }
 
 FString AIndianPokerGameMode::InitNewPlayer(APlayerController* NewPlayerController, const FUniqueNetIdRepl& UniqueId, const FString& Options, const FString& Portal)

@@ -9,6 +9,14 @@
 /**
  * Custom PlayerState to handle multiplayer properties like Nickname, Chips, and Battle State.
  */
+UENUM(BlueprintType)
+enum class EBattleState : uint8
+{
+	Lobby UMETA(DisplayName = "Lobby"),
+	MatchRequested UMETA(DisplayName = "Match Requested"),
+	InGame UMETA(DisplayName = "In Game")
+};
+
 UCLASS()
 class INDIANPOKER_API AIndianPokerPlayerState : public APlayerState
 {
@@ -17,4 +25,9 @@ class INDIANPOKER_API AIndianPokerPlayerState : public APlayerState
 public:
 	AIndianPokerPlayerState();
 
+	UPROPERTY(ReplicatedUsing = OnRep_BattleState, BlueprintReadOnly, Category = "Battle")
+	EBattleState CurrentBattleState;
+
+	UFUNCTION()
+	void OnRep_BattleState();
 };
