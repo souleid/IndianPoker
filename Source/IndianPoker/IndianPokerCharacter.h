@@ -12,6 +12,7 @@ class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
 struct FInputActionValue;
+class UWidgetComponent;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
@@ -28,6 +29,10 @@ class AIndianPokerCharacter : public ACharacter
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FollowCamera;
 	
+	/** Nameplate Widget Component */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = UI, meta = (AllowPrivateAccess = "true"))
+	class UWidgetComponent* NameplateWidget;
+
 	/** MappingContext */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputMappingContext* DefaultMappingContext;
@@ -56,6 +61,16 @@ protected:
 	/** Called for looking input */
 	void Look(const FInputActionValue& Value);
 			
+public:
+	// 직관적인 닉네임 관리를 위해 Character에 직접 리플리케이트 변수 추가
+	UPROPERTY(ReplicatedUsing = OnRep_NickName, BlueprintReadWrite, Category = "Player Info")
+	FString NickName;
+
+	UFUNCTION()
+	void OnRep_NickName();
+
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Player Info")
+	void Server_SetNickName(const FString& InName);
 
 protected:
 

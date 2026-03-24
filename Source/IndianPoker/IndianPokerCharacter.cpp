@@ -10,6 +10,8 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
+#include "Components/WidgetComponent.h"
+#include "Net/UnrealNetwork.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -52,6 +54,13 @@ AIndianPokerCharacter::AIndianPokerCharacter()
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
+
+	// Create Nameplate Widget Component
+	NameplateWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("NameplateWidget"));
+	NameplateWidget->SetupAttachment(RootComponent);
+	NameplateWidget->SetWidgetSpace(EWidgetSpace::Screen); // Always face the camera
+	NameplateWidget->SetDrawAtDesiredSize(true);
+	NameplateWidget->SetRelativeLocation(FVector(0.0f, 0.0f, 110.0f)); // Position it above the character's head
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -127,3 +136,23 @@ void AIndianPokerCharacter::Look(const FInputActionValue& Value)
 		AddControllerPitchInput(LookAxisVector.Y);
 	}
 }
+
+void AIndianPokerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(AIndianPokerCharacter, NickName);
+}
+
+void AIndianPokerCharacter::Server_SetNickName_Implementation(const FString& InName)
+{
+	NickName = InName;
+	// 서버에서도 즉시 UI를 갱신하고 싶다면 OnRep_NickName()을 수동으로 한 번 호출해주셔도 좋습니다.
+}
+
+void AIndianPokerCharacter::OnRep_NickName()
+{
+	// 닉네임이 리플리케이트 되어 들어왔을 때 실행됩니다.
+	// (블루프린트 위젯 바인딩에서 매 틱마다 NickName을 읽어오게 설정하셨다면 이 함수는 비워두셔도 완벽하게 작동합니다!)
+}
+
