@@ -120,17 +120,9 @@ public:
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Battle")
 	void Server_CancelBattleRequest(AIndianPokerCharacter* Target);
 
-	/** 위젯 블루프린트를 화면에 띄우도록 블루프린트로 이벤트를 넘겨줍니다 (수락/거절 팝업) */
-	UFUNCTION(BlueprintImplementableEvent, Category = "Battle")
-	void ShowBattleRequestUI(const FString& ChallengerName, AIndianPokerCharacter* Challenger);
-
 	/** 신청자에게 대기 중 UI를 띄우라고 서버가 내리는 클라이언트 명령 */
 	UFUNCTION(Client, Reliable, Category = "Battle")
 	void Client_ShowWaitingUI(AIndianPokerCharacter* Target);
-
-	/** 내가 배틀을 신청하고 상대방의 대답을 기다릴 때 띄우는 팝업 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "Battle")
-	void ShowWaitingForOpponentUI(AIndianPokerCharacter* Target);
 
 protected:
 

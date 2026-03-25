@@ -19,10 +19,19 @@ public:
 	UFUNCTION(Client, Reliable, BlueprintCallable, Category = "IndianPoker|Input")
 	void Client_TransitionToBattleMode();
 
+	// 팝업(요청/대기창) 모드로 전환: 마우스 표시, 시야 회전만 잠금
+	UFUNCTION(Client, Reliable, BlueprintCallable, Category = "IndianPoker|Input")
+	void Client_TransitionToPopupMode();
+
 	// 로비(이동) 모드로 전환: 마우스 커서 숨김 및 게임 조작 활성화
 	UFUNCTION(Client, Reliable, BlueprintCallable, Category = "IndianPoker|Input")
 	void Client_TransitionToLobbyMode();
 
 protected:
 	virtual void BeginPlay() override;
+
+public:
+	/** 로비 전용 UI를 관장하는 액터 컴포넌트 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI|Components")
+	class ULobbyUIComponent* LobbyUIComp;
 };

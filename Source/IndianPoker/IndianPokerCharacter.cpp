@@ -15,6 +15,7 @@
 #include "Net/UnrealNetwork.h"
 #include "IndianPokerPlayerState.h"
 #include "IndianPokerPlayerController.h"
+#include "LobbyUIComponent.h"
 #include "Engine/Engine.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
@@ -296,38 +297,75 @@ void AIndianPokerCharacter::Server_RequestBattle_Implementation(AIndianPokerChar
 	
 	AIndianPokerPlayerState* MyPS = GetPlayerState<AIndianPokerPlayerState>();
 	AIndianPokerPlayerState* TargetPS = TargetCharacter->GetPlayerState<AIndianPokerPlayerState>();
+
+	UE_LOG(LogTemplateCharacter, Log, TEXT("[Server_RequestBattle] 신청자: %s / 대상: %s"), 
+		MyPS ? *MyPS->GetPlayerName() : TEXT("Unknown"),
+		TargetPS ? *TargetPS->GetPlayerName() : TEXT("Unknown"));
 	
 	// 서버에서도 보안 및 레이스 컨디션 방지를 위해 한 번 더블 체크
 	if (MyPS && TargetPS && 
 		MyPS->CurrentBattleState == EBattleState::Lobby && 
 		TargetPS->CurrentBattleState == EBattleState::Lobby)
 	{
-		// 1. 서버가 허가함 -> 두 캐릭터의 상태를 즉시 '매치 대기중(MatchRequested)'으로 잠금
+		// 1. 서버가 허가함 -> 두 캐릭터의 상태를 즉시 'MatchRequested'으로 잠금
 		MyPS->CurrentBattleState = EBattleState::MatchRequested;
 		TargetPS->CurrentBattleState = EBattleState::MatchRequested;
+
+		UE_LOG(LogTemplateCharacter, Log, TEXT("[Server_RequestBattle] 두 상태 잠금 성공. Target한테 Client RPC 발송..."));
 		
 		// 2. 상대방(Target)에게 수락/거절 팝업창을 띄우도록 Client RPC 명령
 		TargetCharacter->Client_ReceiveBattleRequest(MyPS->GetPlayerName(), this);
 
-		// 3. 나(신청자) 본인의 캐릭터에게도 대기 중 창을 띄우라고 블루프린트 이벤트 호출
+		// 3. 나(신청자) 본인에게도 대기 중 창을 띄우라고 Client RPC 명령
 		Client_ShowWaitingUI(TargetCharacter);
+	}
+	else
+	{
+		UE_LOG(LogTemplateCharacter, Warning, TEXT("[Server_RequestBattle] 선실: 상태 코드 문제로 데이터 차단. MyState=%d, TargetState=%d"),
+			MyPS ? (int32)MyPS->CurrentBattleState : -1,
+			TargetPS ? (int32)TargetPS->CurrentBattleState : -1);
 	}
 }
 
 void AIndianPokerCharacter::Client_ShowWaitingUI_Implementation(AIndianPokerCharacter* Target)
 {
-	ShowWaitingForOpponentUI(Target);
+	UE_LOG(LogTemplateCharacter, Log, TEXT("[Client_ShowWaitingUI] 컨트롤러 LobbyUIComp 탐색 중..."));
+
+	AIndianPokerPlayerController* PC = Cast<AIndianPokerPlayerController>(GetController());
+	if (PC && PC->LobbyUIComp)
+	{
+		UE_LOG(LogTemplateCharacter, Log, TEXT("[Client_ShowWaitingUI] LobbyUIComp 발견! ShowWaitingPopup 호출."));
+
+		PC->LobbyUIComp->ShowWaitingPopup(Target);
+		// 요청 보낸 쪽(Challenger)으로 타이머 시작
+		PC->LobbyUIComp->StartRequestTimer(5.0f, Target, true);
+	}
+	else
+	{
+		UE_LOG(LogTemplateCharacter, Error, TEXT("[Client_ShowWaitingUI] 실패! PC=%s / LobbyUIComp=%s"),
+			PC ? TEXT("OK") : TEXT("NULL"),
+			(PC && PC->LobbyUIComp) ? TEXT("OK") : TEXT("NULL"));
+	}
 }
 
 void AIndianPokerCharacter::Client_ReceiveBattleRequest_Implementation(const FString& ChallengerName, AIndianPokerCharacter* Challenger)
-{
-	if (GEngine)
+{	
+	UE_LOG(LogTemplateCharacter, Log, TEXT("[Client_ReceiveBattleRequest] 컨트롤러 LobbyUIComp 탐색 중. 신청자: %s"), *ChallengerName);
+
+	AIndianPokerPlayerController* PC = Cast<AIndianPokerPlayerController>(GetController());
+	if (PC && PC->LobbyUIComp)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("배틀 요청 도착! 신청자: %s"), *ChallengerName));
+		UE_LOG(LogTemplateCharacter, Log, TEXT("[Client_ReceiveBattleRequest] LobbyUIComp 발견! ShowBattleRequestPopup 호출."));
+		PC->LobbyUIComp->ShowBattleRequestPopup(Challenger->NickName, Challenger);
+		// 요청 받은 쪽(Receiver)으로 타이머 시작
+		PC->LobbyUIComp->StartRequestTimer(5.0f, Challenger, false);
 	}
-	
-	// 블루프린트로 이벤트를 넘겨서 위젯(UI)을 생성하고 화면에 띄우게 만듭니다.
-	ShowBattleRequestUI(ChallengerName, Challenger);
+	else
+	{
+		UE_LOG(LogTemplateCharacter, Error, TEXT("[Client_ReceiveBattleRequest] 실패! PC=%s / LobbyUIComp=%s"),
+			PC ? TEXT("OK") : TEXT("NULL"),
+			(PC && PC->LobbyUIComp) ? TEXT("OK") : TEXT("NULL"));
+	}
 }
 
 void AIndianPokerCharacter::Server_AcceptBattle_Implementation(AIndianPokerCharacter* Challenger)
@@ -352,15 +390,28 @@ void AIndianPokerCharacter::Server_AcceptBattle_Implementation(AIndianPokerChara
 void AIndianPokerCharacter::Server_DeclineBattle_Implementation(AIndianPokerCharacter* Challenger)
 {
 	AIndianPokerPlayerState* MyPS = GetPlayerState<AIndianPokerPlayerState>();
+	AIndianPokerPlayerState* ChallengerPS = Challenger ? Challenger->GetPlayerState<AIndianPokerPlayerState>() : nullptr;
 
-	if (MyPS) MyPS->CurrentBattleState = EBattleState::Lobby;
-	if (Challenger) 
+	UE_LOG(LogTemplateCharacter, Warning, TEXT("[Server_DeclineBattle] 거절자(Me)PS=%s / 신청자(Challenger)=%s / ChallengerPS=%s"),
+		MyPS ? *MyPS->GetPlayerName() : TEXT("NULL"),
+		Challenger ? *Challenger->GetName() : TEXT("NULL"),
+		ChallengerPS ? *ChallengerPS->GetPlayerName() : TEXT("NULL"));
+
+	if (MyPS)
 	{
-		AIndianPokerPlayerState* ChallengerPS = Challenger->GetPlayerState<AIndianPokerPlayerState>();
-		if (ChallengerPS) ChallengerPS->CurrentBattleState = EBattleState::Lobby;
+		MyPS->CurrentBattleState = EBattleState::Lobby;
+		UE_LOG(LogTemplateCharacter, Warning, TEXT("[Server_DeclineBattle] 거절자 상태 Lobby 전환 완료."));
 	}
 
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Yellow, TEXT("배틀 요청이 거절/타임아웃 되었습니다. (둘 다 로비로 복귀)"));
+	if (ChallengerPS)
+	{
+		ChallengerPS->CurrentBattleState = EBattleState::Lobby;
+		UE_LOG(LogTemplateCharacter, Warning, TEXT("[Server_DeclineBattle] 신청자 상태 Lobby 전환 완료. OnRep이 신청자 클라이언트에 전파되어야 합니다."));
+	}
+	else
+	{
+		UE_LOG(LogTemplateCharacter, Error, TEXT("[Server_DeclineBattle] !! ChallengerPS가 NULL입니다. Challenger 참조 문제 또는 PlayerState 아직 미할당!"));
+	}
 }
 
 void AIndianPokerCharacter::Server_CancelBattleRequest_Implementation(AIndianPokerCharacter* Target)
