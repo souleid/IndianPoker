@@ -13,6 +13,8 @@ class AIndianPokerGameMode : public AGameModeBase
 
 public:
 	AIndianPokerGameMode();
+
+	virtual FString InitNewPlayer(APlayerController* NewPlayerController, const FUniqueNetIdRepl& UniqueId, const FString& Options, const FString& Portal = TEXT("")) override;
 };
 
 
