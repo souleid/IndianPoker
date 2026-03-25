@@ -27,6 +27,17 @@ public:
 	UFUNCTION(Client, Reliable, BlueprintCallable, Category = "IndianPoker|Input")
 	void Client_TransitionToLobbyMode();
 
+	UFUNCTION(Client, Reliable)
+	void Client_ShowInGamePokerUI();
+
+	/** 매치 채팅 전송 (서버로) */
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "IndianPoker|Chat")
+	void Server_SendMatchMessage(const FString& Message);
+
+	/** 매치 채팅 수신 (클라이언트로) */
+	UFUNCTION(Client, Reliable, Category = "IndianPoker|Chat")
+	void Client_ReceiveMatchMessage(const FString& Sender, const FString& Message);
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -34,4 +45,8 @@ public:
 	/** 로비 전용 UI를 관장하는 액터 컴포넌트 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI|Components")
 	class ULobbyUIComponent* LobbyUIComp;
+
+	/** 인게임 인디언포커 전용 UI를 관장하는 액터 컴포넌트 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI|Components")
+	class UInGamePokerUIComponent* PokerUIComp;
 };

@@ -1,6 +1,5 @@
-﻿// Copyright Epic Games, Inc. All Rights Reserved.
-
-#include "IndianPokerCharacter.h"
+﻿#include "IndianPokerCharacter.h"
+#include "IndianPokerGameMode.h"
 #include "Engine/LocalPlayer.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -442,9 +441,12 @@ void AIndianPokerCharacter::Server_AcceptBattle_Implementation(AIndianPokerChara
 			ChallengerPC->LobbyUIComp->CloseAllLobbyPopups();
 		}
 
-		// 2. 서버에서 BattleOpponent + bBattleTransitioning 세팅
-		//    → Replicated 이므로 모든 클라이언트에 전파됨
-		//    → 비-로컬 클라이언트는 OnRep_BattleTransitioning에서 회전 시작
+		// 2. 서버에서 Match 생성 + BattleOpponent 세팅
+		if (AIndianPokerGameMode* GM = GetWorld()->GetAuthGameMode<AIndianPokerGameMode>())
+		{
+			GM->CreateMatch(this, Challenger);
+		}
+
 		BattleOpponent           = Challenger;
 		bBattleTransitioning     = true;
 		Challenger->BattleOpponent       = this;
@@ -622,6 +624,125 @@ void AIndianPokerCharacter::TickBattleTransition(float DeltaTime)
 		bBattleTransitioning = false;
 		UE_LOG(LogTemplateCharacter, Log, TEXT("[TickBattleTransition] 전환 완료."));
 
+		if (IsLocallyControlled())
+		{
+			if (AIndianPokerPlayerController* PC = Cast<AIndianPokerPlayerController>(GetController()))
+			{
+				// 컨트롤러에게 인게임 UI 띄우라고 지시
+				PC->Client_ShowInGamePokerUI();
+			}
+		}
+
+		// 서버 사이드: 라운드 시작 (한 명만 호출해도 되도록 HasAuthority 체크)
+		if (HasAuthority())
+		{
+			StartPokerRound();
+		}
 	}
 }
+
+// -------------------------------------------------------
+// Indian Poker Core Logic Implementations
+// -------------------------------------------------------
+
+void AIndianPokerCharacter::StartPokerRound()
+{
+	if (!HasAuthority()) return;
+
+	if (AIndianPokerGameMode* GM = GetWorld()->GetAuthGameMode<AIndianPokerGameMode>())
+	{
+		GM->StartPokerMatchRound(this);
+	}
+}
+
+void AIndianPokerCharacter::Server_NetRace_Implementation(int32 Amount)
+{
+	if (AIndianPokerGameMode* GM = GetWorld()->GetAuthGameMode<AIndianPokerGameMode>())
+	{
+		GM->ProcessBetAction(this, EPokerBetAction::Race, Amount);
+	}
+}
+
+void AIndianPokerCharacter::Server_NetCall_Implementation()
+{
+	if (AIndianPokerGameMode* GM = GetWorld()->GetAuthGameMode<AIndianPokerGameMode>())
+	{
+		GM->ProcessBetAction(this, EPokerBetAction::Call);
+	}
+}
+
+void AIndianPokerCharacter::Server_NetDie_Implementation()
+{
+	if (AIndianPokerGameMode* GM = GetWorld()->GetAuthGameMode<AIndianPokerGameMode>())
+	{
+		GM->ProcessBetAction(this, EPokerBetAction::Die);
+	}
+}
+
+void AIndianPokerCharacter::Server_EndBattle_Implementation()
+{
+	if (!HasAuthority()) return;
+
+	// 1. 게임모드에서 매치 데이터 삭제
+	if (AIndianPokerGameMode* GM = GetWorld()->GetAuthGameMode<AIndianPokerGameMode>())
+	{
+		GM->RemoveMatch(this);
+	}
+
+	// 2. 상태 초기화 (본인 및 상대)
+	AIndianPokerPlayerState* MyPS = GetPlayerState<AIndianPokerPlayerState>();
+	if (MyPS) MyPS->CurrentBattleState = EBattleState::Lobby;
+
+	if (BattleOpponent)
+	{
+		AIndianPokerPlayerState* OppPS = BattleOpponent->GetPlayerState<AIndianPokerPlayerState>();
+		if (OppPS) OppPS->CurrentBattleState = EBattleState::Lobby;
+
+		// 상대방에게도 종료 연출 명령
+		BattleOpponent->Client_EndBattleTransition();
+		BattleOpponent->BattleOpponent = nullptr;
+		BattleOpponent->bBattleTransitioning = false;
+	}
+
+	// 3. 내 연출 원복 및 포인터 정리
+	Client_EndBattleTransition();
+	BattleOpponent = nullptr;
+	bBattleTransitioning = false;
+}
+
+void AIndianPokerCharacter::Client_ReceiveOpponentCard_Implementation(uint8 CardValue)
+{
+	if (AIndianPokerPlayerController* PC = Cast<AIndianPokerPlayerController>(GetController()))
+	{
+		if (PC->PokerUIComp)
+		{
+			//PC->PokerUIComp->UpdateOpponentCardUI(CardValue);
+		}
+	}
+}
+
+void AIndianPokerCharacter::Client_ShowRoundResult_Implementation(uint8 MyCard, uint8 OpponentCard, int32 WinnerResult)
+{
+	if (AIndianPokerPlayerController* PC = Cast<AIndianPokerPlayerController>(GetController()))
+	{
+		if (PC->PokerUIComp)
+		{
+			//PC->PokerUIComp->ShowRoundResult(MyCard, OpponentCard, WinnerResult);
+		}
+	}
+}
+
+void AIndianPokerCharacter::Client_NotifyYourTurn_Implementation(int32 AmountToCall)
+{
+	if (AIndianPokerPlayerController* PC = Cast<AIndianPokerPlayerController>(GetController()))
+	{
+		if (PC->PokerUIComp)
+		{
+			// UI 컴포넌트에 턴 시작 알림 (필요한 콜 금액 전달)
+			//PC->PokerUIComp->UpdateTurnUI(true);
+			//PC->PokerUIComp->NotifyRequiredCallAmount(AmountToCall);
+		}
+	}
+}
+
 

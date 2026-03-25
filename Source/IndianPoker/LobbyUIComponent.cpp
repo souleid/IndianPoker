@@ -1,4 +1,4 @@
-#include "LobbyUIComponent.h"
+﻿#include "LobbyUIComponent.h"
 #include "IndianPokerCharacter.h"
 #include "IndianPokerPlayerController.h"
 #include "TimerManager.h"
@@ -8,6 +8,14 @@
 ULobbyUIComponent::ULobbyUIComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+}
+
+void ULobbyUIComponent::ShowLobbyUI()
+{
+}
+
+void ULobbyUIComponent::HideLobbyUI()
+{
 }
 
 void ULobbyUIComponent::StartRequestTimer(float Duration, AIndianPokerCharacter* InOpponent, bool bIsChallenger)

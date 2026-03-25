@@ -137,11 +137,49 @@ public:
 	UFUNCTION(Client, Reliable, Category = "Battle")
 	void Client_EndBattleTransition();
 
+	// -------------------------------------------------------
+	// Secure Card Distribution (Targeted RPCs)
+	// -------------------------------------------------------
+
+	/** 상대방의 카드 정보만 수신 (내 카드는 숨김) */
+	UFUNCTION(Client, Reliable, Category = "Poker")
+	void Client_ReceiveOpponentCard(uint8 CardValue);
+
+	/** 라운드 종료 시 내 카드와 상대 카드를 모두 공개 */
+	UFUNCTION(Client, Reliable, Category = "Poker")
+	void Client_ShowRoundResult(uint8 MyCard, uint8 OpponentCard, int32 WinnerResult);
+
+	/** 내 턴이 되었음을 알림 (콜에 필요한 칩 개수 포함) */
+	UFUNCTION(Client, Reliable, Category = "Poker")
+	void Client_NotifyYourTurn(int32 AmountToCall);
+
+	// -------------------------------------------------------
+	// Indian Poker Core Logic
+	// -------------------------------------------------------
+
+	/** 베팅하기: 이전 베팅보다 더 많은 칩을 걸 때 호출 */
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Poker")
+	void Server_NetRace(int32 Amount);
+
+	/** 콜: 상대 베팅액과 동일하게 맞추고 승패 판정 */
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Poker")
+	void Server_NetCall();
+
+	/** 다이: 기권하여 이번 판을 포기 */
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Poker")
+	void Server_NetDie();
+
+	/** 배틀 기권 또는 최종 종료 시 호출 */
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Poker")
+	void Server_EndBattle();
+
+	/** 라운드 시작 (서버 전용) */
+	void StartPokerRound();
+
 	/** 배틀 카메라 목표 ArmLength (에디터에서 조절 가능) */
 	UPROPERTY(EditAnywhere, Category = "Battle|Camera")
 	float BattleArmLength = 400.f;
 
-	/** 배틀 카메라 목표 BoomRotation - 위에서 내려보는 각도 */
 	UPROPERTY(EditAnywhere, Category = "Battle|Camera")
 	FRotator BattleBoomRotation = FRotator(-60.f, 0.f, 0.f);
 
