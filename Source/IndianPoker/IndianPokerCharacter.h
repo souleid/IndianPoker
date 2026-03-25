@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -14,6 +14,7 @@ class UInputAction;
 struct FInputActionValue;
 class UWidgetComponent;
 class USphereComponent;
+class UCharacterMovementComponent;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
@@ -124,11 +125,63 @@ public:
 	UFUNCTION(Client, Reliable, Category = "Battle")
 	void Client_ShowWaitingUI(AIndianPokerCharacter* Target);
 
+	// -------------------------------------------------------
+	// Battle Transition (수락 후 연출)
+	// -------------------------------------------------------
+
+	/** 수락 확정 시 서버 → 양쪽 클라이언트에게 배틀 연출 시작 명령 */
+	UFUNCTION(Client, Reliable, Category = "Battle")
+	void Client_StartBattleTransition(AIndianPokerCharacter* Opponent);
+
+	/** 배틀 종료 시 카메라/회전 원복 명령 */
+	UFUNCTION(Client, Reliable, Category = "Battle")
+	void Client_EndBattleTransition();
+
+	/** 배틀 카메라 목표 ArmLength (에디터에서 조절 가능) */
+	UPROPERTY(EditAnywhere, Category = "Battle|Camera")
+	float BattleArmLength = 400.f;
+
+	/** 배틀 카메라 목표 BoomRotation - 위에서 내려보는 각도 */
+	UPROPERTY(EditAnywhere, Category = "Battle|Camera")
+	FRotator BattleBoomRotation = FRotator(-60.f, 0.f, 0.f);
+
+	/** 배틀 전환 총 소요 시간 (초) */
+	UPROPERTY(EditAnywhere, Category = "Battle|Camera")
+	float BattleTransitionDuration = 1.2f;
+
 protected:
-
 	virtual void NotifyControllerChanged() override;
-
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+private:
+	// -------------------------------------------------------
+	// Battle Transition 내부 상태
+	// -------------------------------------------------------
+
+	/** 마주볼 배틀 상대 - Replicated로 모든 클라이언트에서 회전 방향 계산 가능 */
+	UPROPERTY(Replicated, Transient)
+	AIndianPokerCharacter* BattleOpponent = nullptr;
+
+	/** 전환 진행 중 여부 - 모든 클라이언트에 복제하여 상대방 화면에서도 회전 */
+	UPROPERTY(ReplicatedUsing = OnRep_BattleTransitioning)
+	bool bBattleTransitioning = false;
+
+	UFUNCTION()
+	void OnRep_BattleTransitioning();
+
+	/** 전환 진행도 (0→1) */
+	float BattleTransitionAlpha = 0.f;
+
+	/** 저장된 원래 카메라 Arm 값 (배틀 종료 시 복원용) */
+	float   SavedArmLength = 400.f;
+	FRotator SavedBoomRotation = FRotator(-15.f, 0.f, 0.f);
+	FVector  SavedBoomSocketOffset = FVector::ZeroVector;
+
+	/** 전환 시작 시 초기 액터 Yaw (회전 Lerp 기준점) */
+	float SavedActorYaw = 0.f;
+
+	/** Tick에서 호출되는 전환 처리 함수 */
+	void TickBattleTransition(float DeltaTime);
 
 public:
 	/** Returns CameraBoom subobject **/
@@ -136,4 +189,3 @@ public:
 	/** Returns FollowCamera subobject **/
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 };
-

@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "IndianPokerCharacter.h"
 #include "Engine/LocalPlayer.h"
@@ -164,6 +164,24 @@ void AIndianPokerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AIndianPokerCharacter, NickName);
+	DOREPLIFETIME(AIndianPokerCharacter, BattleOpponent);
+	DOREPLIFETIME(AIndianPokerCharacter, bBattleTransitioning);
+}
+
+void AIndianPokerCharacter::OnRep_BattleTransitioning()
+{
+	if (bBattleTransitioning)
+	{
+		// 전환 시작 시: 현재 Yaw를 기준점으로 저장, Alpha 리셋
+		SavedActorYaw         = GetActorRotation().Yaw;
+		BattleTransitionAlpha = 0.f;
+		GetCharacterMovement()->bOrientRotationToMovement = false;
+	}
+	else
+	{
+		// 전환 종료 시: 이동방향 자동회전 복구
+		GetCharacterMovement()->bOrientRotationToMovement = true;
+	}
 }
 
 #include "Kismet/GameplayStatics.h"
@@ -172,12 +190,41 @@ void AIndianPokerCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// 로컬 플레이어만 매 프레임 정면 타겟을 스캔해서 외곽선을 그립니다.
+	if (bBattleTransitioning && BattleOpponent && BattleOpponent->IsValidLowLevel())
+	{
+		// 카메라 전환은 로컬 플레이어만
+		if (IsLocallyControlled())
+		{
+			TickBattleTransition(DeltaTime);
+		}
+		else
+		{
+			// Non-owning 클라이언트: 회전만 독립적으로 실행
+			BattleTransitionAlpha = FMath::Clamp(BattleTransitionAlpha + DeltaTime / BattleTransitionDuration, 0.f, 1.f);
+			const float EasedAlpha = FMath::InterpEaseInOut(0.f, 1.f, BattleTransitionAlpha, 2.f);
+			const FVector ToOpponent = BattleOpponent->GetActorLocation() - GetActorLocation();
+			const float   TargetYaw  = FRotationMatrix::MakeFromX(ToOpponent).Rotator().Yaw;
+			SetActorRotation(FRotator(0.f, FMath::LerpStable(SavedActorYaw, TargetYaw, EasedAlpha), 0.f));
+		}
+		return; // 전환 중에는 외곽선 스캔 스킵
+	}
+
+	// 외곽선 스캔: 로컬 플레이어이고 Lobby 상태일 때만
 	if (IsLocallyControlled())
 	{
-		UpdateOutlineTarget();
+		AIndianPokerPlayerState* MyPS = GetPlayerState<AIndianPokerPlayerState>();
+		if (MyPS && MyPS->CurrentBattleState == EBattleState::Lobby)
+		{
+			UpdateOutlineTarget();
+		}
+		else if (CurrentTargetCharacter) // InGame 상태: 외곽선 제거
+		{
+			SetCharacterOutline(CurrentTargetCharacter, false, 0);
+			CurrentTargetCharacter = nullptr;
+		}
 	}
 }
+
 
 void AIndianPokerCharacter::UpdateOutlineTarget()
 {
@@ -370,20 +417,42 @@ void AIndianPokerCharacter::Client_ReceiveBattleRequest_Implementation(const FSt
 
 void AIndianPokerCharacter::Server_AcceptBattle_Implementation(AIndianPokerCharacter* Challenger)
 {
+	if (!Challenger) return;
+
 	AIndianPokerPlayerState* MyPS = GetPlayerState<AIndianPokerPlayerState>();
-	AIndianPokerPlayerState* ChallengerPS = Challenger ? Challenger->GetPlayerState<AIndianPokerPlayerState>() : nullptr;
+	AIndianPokerPlayerState* ChallengerPS = Challenger->GetPlayerState<AIndianPokerPlayerState>();
 
 	if (MyPS && ChallengerPS)
 	{
 		MyPS->CurrentBattleState = EBattleState::InGame;
 		ChallengerPS->CurrentBattleState = EBattleState::InGame;
 		
-		// Input Mode를 UI 전용 모드로 변경
 		AIndianPokerPlayerController* MyPC = Cast<AIndianPokerPlayerController>(GetController());
 		AIndianPokerPlayerController* ChallengerPC = Cast<AIndianPokerPlayerController>(Challenger->GetController());
-		
-		if (MyPC) MyPC->Client_TransitionToBattleMode();
-		if (ChallengerPC) ChallengerPC->Client_TransitionToBattleMode();
+
+		// 1. 양쪽 타이머 정리 + 팝업 닫기
+		if (MyPC && MyPC->LobbyUIComp)
+		{
+			MyPC->LobbyUIComp->CancelRequestTimer();
+			MyPC->LobbyUIComp->CloseAllLobbyPopups();
+		}
+		if (ChallengerPC && ChallengerPC->LobbyUIComp)
+		{
+			ChallengerPC->LobbyUIComp->CancelRequestTimer();
+			ChallengerPC->LobbyUIComp->CloseAllLobbyPopups();
+		}
+
+		// 2. 서버에서 BattleOpponent + bBattleTransitioning 세팅
+		//    → Replicated 이므로 모든 클라이언트에 전파됨
+		//    → 비-로컬 클라이언트는 OnRep_BattleTransitioning에서 회전 시작
+		BattleOpponent           = Challenger;
+		bBattleTransitioning     = true;
+		Challenger->BattleOpponent       = this;
+		Challenger->bBattleTransitioning = true;
+
+		// 3. 로컬 클라이언트에게 카메라 전환 + InputMode 명령 (Client RPC)
+		Client_StartBattleTransition(Challenger);
+		Challenger->Client_StartBattleTransition(this);
 	}
 }
 
@@ -438,5 +507,121 @@ void AIndianPokerCharacter::OnRep_NickName()
 {
 	// 닉네임이 리플리케이트 되어 들어왔을 때 실행됩니다.
 	// (블루프린트 위젯 바인딩에서 매 틱마다 NickName을 읽어오게 설정하셨다면 이 함수는 비워두셔도 완벽하게 작동합니다!)
+}
+
+// -------------------------------------------------------
+// Battle Transition
+// -------------------------------------------------------
+
+void AIndianPokerCharacter::Client_StartBattleTransition_Implementation(AIndianPokerCharacter* Opponent)
+{
+	if (!IsLocallyControlled() || !Opponent || !CameraBoom) return;
+
+	UE_LOG(LogTemplateCharacter, Log, TEXT("[Client_StartBattleTransition] 상대: %s"), *Opponent->NickName);
+
+	// 0. 클라이언트 사이드 RequestTimer 강제 정리 + 팝업 닫기
+	//    (Server_AcceptBattle에서 서버쪽을 정리했지만 클라이언트 타이머는 따로 정리해야 함)
+	if (AIndianPokerPlayerController* IPC = Cast<AIndianPokerPlayerController>(GetController()))
+	{
+		if (IPC->LobbyUIComp)
+		{
+			IPC->LobbyUIComp->CancelRequestTimer();
+			IPC->LobbyUIComp->CloseAllLobbyPopups();
+		}
+	}
+
+	// 1. 상대 + 초기 회전값 저장
+	BattleOpponent = Opponent;
+	SavedActorYaw  = GetActorRotation().Yaw;
+
+	// 2. 현재 카메라 붐 상태 저장 (배틀 종료 시 복원용)
+	SavedArmLength        = CameraBoom->TargetArmLength;
+	SavedBoomRotation     = CameraBoom->GetRelativeRotation();
+	SavedBoomSocketOffset = CameraBoom->SocketOffset;
+
+	// 3. 이동 중 자동 회전 비활성화
+	GetCharacterMovement()->bOrientRotationToMovement = false;
+
+	// 4. 카메라 붐이 컨트롤러 회전을 따르지 않도록 고정
+	CameraBoom->bUsePawnControlRotation = false;
+
+	// 5. 전환 시작
+	BattleTransitionAlpha = 0.f;
+	bBattleTransitioning  = true;
+
+	// 6. 입력 모드: UI Only (마우스 O, WASD 이동 완전 차단)
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->bShowMouseCursor = true;
+		PC->SetInputMode(FInputModeUIOnly());
+	}
+}
+
+void AIndianPokerCharacter::Client_EndBattleTransition_Implementation()
+{
+	if (!IsLocallyControlled() || !CameraBoom) return;
+
+	UE_LOG(LogTemplateCharacter, Log, TEXT("[Client_EndBattleTransition] 카메라/회전 원복 시작."));
+
+	// 전환 역방향 재생 (현재 alpha에서 0으로)
+	// 간단하게 저장값 즉시 복원 후 역방향 Lerp 시작
+	BattleOpponent       = nullptr;
+	BattleTransitionAlpha = 1.f;   // 역방향으로 재생하려면 1에서 시작
+	bBattleTransitioning  = true;  // Tick에서 감소 방향으로 처리
+
+	// 이동 방향 자동 회전 즉시 복구 (배틀 끝났으니 다시 이동 방향으로 돌아가도 됨)
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	CameraBoom->bUsePawnControlRotation = true;
+
+	// 카메라 즉시 복원 (부드럽게 하려면 alpha 역Lerp 추가 가능)
+	CameraBoom->TargetArmLength   = SavedArmLength;
+	CameraBoom->SetRelativeRotation(SavedBoomRotation);
+	CameraBoom->SocketOffset       = SavedBoomSocketOffset;
+	bBattleTransitioning           = false;
+
+	AIndianPokerPlayerController* PC = Cast<AIndianPokerPlayerController>(GetController());
+	if (PC) PC->Client_TransitionToLobbyMode();
+}
+
+void AIndianPokerCharacter::TickBattleTransition(float DeltaTime)
+{
+	if (!CameraBoom) return;
+
+	// Alpha 0→1 진행 (전체 Duration으로)
+	BattleTransitionAlpha = FMath::Clamp(BattleTransitionAlpha + DeltaTime / BattleTransitionDuration, 0.f, 1.f);
+
+	// ■ Phase 1 (Alpha 0→0.5): 쪭러쯐 회전만
+	// ■ Phase 2 (Alpha 0.5→1): 카메라 전환만
+	const float RotPhaseMax = 0.5f;
+	const float CamPhaseMin = 0.5f;
+
+	// --- Phase 1: 액터 Yaw 회전 ---
+	if (BattleOpponent && BattleOpponent->IsValidLowLevel())
+	{
+		// 0→RotPhaseMax 구간을 0→1로 정규화
+		const float RotAlpha    = FMath::Clamp(BattleTransitionAlpha / RotPhaseMax, 0.f, 1.f);
+		const float EasedRot    = FMath::InterpEaseInOut(0.f, 1.f, RotAlpha, 2.f);
+		const FVector  ToOpponent = BattleOpponent->GetActorLocation() - GetActorLocation();
+		const float    TargetYaw  = FRotationMatrix::MakeFromX(ToOpponent).Rotator().Yaw;
+		SetActorRotation(FRotator(0.f, FMath::LerpStable(SavedActorYaw, TargetYaw, EasedRot), 0.f));
+	}
+
+	// --- Phase 2: 카메라 붐 전환 ---
+	if (BattleTransitionAlpha >= CamPhaseMin)
+	{
+		// CamPhaseMin→1 구간을 0→1로 정규화
+		const float CamAlpha  = FMath::Clamp((BattleTransitionAlpha - CamPhaseMin) / (1.f - CamPhaseMin), 0.f, 1.f);
+		const float EasedCam  = FMath::InterpEaseInOut(0.f, 1.f, CamAlpha, 2.f);
+		CameraBoom->TargetArmLength = FMath::Lerp(SavedArmLength, BattleArmLength, EasedCam);
+		CameraBoom->SetRelativeRotation(FMath::Lerp(SavedBoomRotation, BattleBoomRotation, EasedCam));
+	}
+
+	// --- 전환 완료 ---
+	if (BattleTransitionAlpha >= 1.f)
+	{
+		bBattleTransitioning = false;
+		UE_LOG(LogTemplateCharacter, Log, TEXT("[TickBattleTransition] 전환 완료."));
+
+	}
 }
 
