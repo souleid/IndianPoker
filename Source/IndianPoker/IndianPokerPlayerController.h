@@ -1,8 +1,13 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "IndianPokerPlayerController.generated.h"
+
+class UInputAction;
+class UInputMappingContext;
+
+struct FInputActionValue;
 
 /**
  * Custom PlayerController to handle UI Input Modes during Indian Poker matches.
@@ -11,6 +16,16 @@ UCLASS()
 class INDIANPOKER_API AIndianPokerPlayerController : public APlayerController
 {
 	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input", meta = (AllowPrivateAccess = "true"))
+	class UInputMappingContext* MovementContext;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input", meta = (AllowPrivateAccess = "true"))
+	class UInputMappingContext* SystemContext;
+
+	/** Chat Input Action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* ChatAction;
 
 public:
 	AIndianPokerPlayerController();
@@ -36,10 +51,14 @@ public:
 
 	/** 매치 채팅 수신 (클라이언트로) */
 	UFUNCTION(Client, Reliable, Category = "IndianPoker|Chat")
-	void Client_ReceiveMatchMessage(const FString& Sender, const FString& Message);
+	void Client_ReceiveMatchMessage(int32 SenderID, const FString& Sender, const FString& Message);
 
 protected:
 	virtual void BeginPlay() override;
+
+	virtual void SetupInputComponent() override;
+
+	void OnChatActionPressed(const FInputActionValue& Value);
 
 public:
 	/** 로비 전용 UI를 관장하는 액터 컴포넌트 */

@@ -257,6 +257,8 @@ void AIndianPokerGameMode::ProcessBetAction(AIndianPokerCharacter* Player, EPoke
     case EPokerBetAction::Race:
         {
             // 내가 콜 해야 할 금액 + 추가 레이즈 금액
+      			if (Amount <= 0) return;
+
             int32 ToCall = Match->CurrentMaxBet - MyPS->CurrentBet;
             int32 TotalToAdd = ToCall + Amount;
 
@@ -313,14 +315,18 @@ void AIndianPokerGameMode::RouteMatchChat(AIndianPokerCharacter* Sender, const F
    if (!Sender) return;
 
     FPokerMatch* Match = GetMatch(Sender);
+		
     if (Match)
     {
+			  APlayerState* PS = Sender->GetPlayerState();
+				if (!PS) return;
+        int32 SenderID = PS->GetPlayerId();
         // 1. 매치에 속한 양쪽 플레이어의 컨트롤러를 찾아 클라이언트 함수(RPC) 호출
         if (Match->Player1) 
         {
             if (AIndianPokerPlayerController* PC1 = Cast<AIndianPokerPlayerController>(Match->Player1->GetController()))
             {
-                PC1->Client_ReceiveMatchMessage(Sender->NickName, Message);
+                PC1->Client_ReceiveMatchMessage(SenderID, Sender->NickName, Message);
             }
         }
         
@@ -328,7 +334,7 @@ void AIndianPokerGameMode::RouteMatchChat(AIndianPokerCharacter* Sender, const F
         {
             if (AIndianPokerPlayerController* PC2 = Cast<AIndianPokerPlayerController>(Match->Player2->GetController()))
             {
-                PC2->Client_ReceiveMatchMessage(Sender->NickName, Message);
+                PC2->Client_ReceiveMatchMessage(SenderID, Sender->NickName, Message);
             }
         }
         

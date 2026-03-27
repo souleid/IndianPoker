@@ -1,4 +1,4 @@
-﻿#include "IndianPokerPlayerState.h"
+#include "IndianPokerPlayerState.h"
 #include "Net/UnrealNetwork.h"
 #include "IndianPokerPlayerController.h"
 #include "LobbyUIComponent.h"

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
@@ -7,7 +7,7 @@
 
 class AIndianPokerPlayerController;
 
-UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
+UCLASS(ClassGroup = (Custom), Blueprintable, meta = (BlueprintSpawnableComponent))
 class INDIANPOKER_API UInGamePokerUIComponent : public UActorComponent
 {
 	GENERATED_BODY()
@@ -27,6 +27,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Poker UI")
 	void HidePokerUI();
+
+	// BP에서 구현해서 포커싱을 처리할 이벤트
+	UFUNCTION(BlueprintImplementableEvent, Category = "Poker UI")
+	void K2_FocusChatInput();
 
 	// ==========================================
 	// 게임 로직 연동용 함수 (예시)
@@ -53,7 +57,7 @@ public:
 
 	// 상대방이 베팅/다이 했을 때 알림을 띄워주는 함수
 	UFUNCTION(BlueprintImplementableEvent, Category = "Poker UI")
-	void ShowOpponentAction(const FString& ActionMessage);
+	void ShowOpponentAction(const FString& Sender, const FString& ActionMessage, bool bIsMine);
 
 protected:
 	// 띄워줄 UMG 위젯 클래스 (블루프린트에서 할당)
@@ -61,10 +65,10 @@ protected:
 	TSubclassOf<UUserWidget> PokerWidgetClass;
 
 	// 실제 화면에 띄워진 위젯 인스턴스
-	UPROPERTY()
+	UPROPERTY(BlueprintReadWrite, Category = "UI")
 	UUserWidget* PokerWidgetInstance;
 
 	// 컨트롤러 캐싱용
-	UPROPERTY()
+	UPROPERTY(BlueprintReadWrite, Category = "Input")
 	AIndianPokerPlayerController* OwnerPC;
 };
