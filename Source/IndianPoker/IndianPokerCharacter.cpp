@@ -1,4 +1,4 @@
-#include "IndianPokerCharacter.h"
+﻿#include "IndianPokerCharacter.h"
 #include "IndianPokerGameMode.h"
 #include "Engine/LocalPlayer.h"
 #include "Camera/CameraComponent.h"
@@ -16,6 +16,7 @@
 #include "IndianPokerPlayerController.h"
 #include "LobbyUIComponent.h"
 #include "Engine/Engine.h"
+#include "Kismet/GameplayStatics.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -187,8 +188,6 @@ void AIndianPokerCharacter::OnRep_BattleTransitioning()
 		GetCharacterMovement()->bOrientRotationToMovement = true;
 	}
 }
-
-#include "Kismet/GameplayStatics.h"
 
 void AIndianPokerCharacter::Tick(float DeltaTime)
 {

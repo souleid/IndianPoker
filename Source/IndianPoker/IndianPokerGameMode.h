@@ -1,4 +1,4 @@
-﻿// Copyright Epic Games, Inc. All Rights Reserved.
+// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -99,7 +99,11 @@ public:
 
 	void RouteMatchChat(class AIndianPokerCharacter* Sender, const FString& Message);
 
+	/** 매치 중인 플레이어들에게 시스템 공지 메세지 브로드캐스트 */
+	void BroadcastMatchMessage(struct FPokerMatch* Match, const FString& Message);
+
 	bool CheckBattleEnd(FPokerMatch* Match);
+
 private:
 	/** 진행 중인 모든 매치 리스트 */
 	UPROPERTY()
