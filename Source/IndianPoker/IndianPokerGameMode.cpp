@@ -237,7 +237,16 @@ void AIndianPokerGameMode::DetermineWinnerAndDistributeChips(FPokerMatch* Match)
 		PS2->CurrentBet = 0;
 
 		UE_LOG(LogTemp, Log, TEXT("[GameMode] 라운드 종료 처리 완료: 승자 %d, 판돈 %d"), Winner, TotalPot);
+
+		// 안내 메세지 추가
+		if (Winner == 0) {
+			BroadcastMatchMessage(Match, TEXT("이번 라운드는 무승부"));
+		} else {
+			AIndianPokerCharacter* WinChar = (Winner == 1) ? Match->Player1 : Match->Player2;
+			BroadcastMatchMessage(Match, FString::Printf(TEXT("%s님 라운드 승! (%d 수령)"), *WinChar->NickName, TotalPot));
+		}
 	}
+
 
 	if (!CheckBattleEnd(Match)) {
 		if (GetMatchByID(Match->MatchID))
@@ -301,6 +310,9 @@ void AIndianPokerGameMode::ProcessFold(AIndianPokerCharacter* FoldingPlayer)
 		UE_LOG(LogTemp, Log, TEXT("[GameMode] 기권 종료: 승자 %d, 공개 카드 P1:%d, P2:%d"),
 			WinnerIndex, Match->P1Card, Match->P2Card);
 
+		BroadcastMatchMessage(Match, FString::Printf(TEXT("%s 다이(Fold)"), *FoldingPlayer->NickName));
+
+
 		if (!CheckBattleEnd(Match)) {
 			if (GetMatchByID(Match->MatchID))
 			{
@@ -327,23 +339,36 @@ void AIndianPokerGameMode::ProcessBetAction(AIndianPokerCharacter* Player, EPoke
     {
     case EPokerBetAction::Race:
         {
-            // 내가 콜 해야 할 금액 + 추가 레이즈 금액
+            // [구조 수정] 비누적식 베팅: 이전에 소모한 칩과는 상관없이 현재 턴에 Amount만큼 새로 베팅
       			if (Amount <= 0) return;
 
-						int32 ToCall = Match->CurrentMaxBet - MyPS->CurrentBet;
-						int32 TotalToAdd = ToCall + Amount;
-
-						int32 ActualAdd = FMath::Min(TotalToAdd, MyPS->Chips);
+						int32 ToCall = Match->CurrentMaxBet;
+						int32 ActualAdd = FMath::Min(Amount, MyPS->Chips);
 
             if (ActualAdd > 0)
             {
                 MyPS->Chips -= ActualAdd;
-                MyPS->CurrentBet += ActualAdd;
-                Match->AccumulatedPot += ActualAdd; // 판돈은 바로바로 금고에!
-                Match->CurrentMaxBet = FMath::Max(Match->CurrentMaxBet, MyPS->CurrentBet);
+                MyPS->CurrentBet = ActualAdd; // 이번 턴에 낸 금액 저장
+                Match->AccumulatedPot += ActualAdd; 
+                Match->CurrentMaxBet = ActualAdd; // 다음 사람이 내야 할 금액으로 갱신
 
 								MyPS->AccumulatedPot = Match->AccumulatedPot;
 								OppPS->AccumulatedPot = Match->AccumulatedPot;
+
+								FString AllInMsg = (MyPS->Chips <= 0) ? TEXT(" (올인!)") : TEXT("");
+
+                // 턴 교체 전에 올인 상태 체크
+                if (MyPS->Chips <= 0 || (OppPS && OppPS->Chips <= 0))
+                {
+                    // 비누적식에서는 내가 돈을 내면 상대가 무조건 대응해야 하므로, 
+                    // 내가 올인했지만 상대보다 "새로 낸 금액"이 적거나 같을 때만 종료
+                    if (ActualAdd <= ToCall)
+                    {
+                        BroadcastMatchMessage(Match, FString::Printf(TEXT("%s, %d개 레이스!%s"), *Player->NickName, Amount, *AllInMsg));
+                        DetermineWinnerAndDistributeChips(Match);
+                        return;
+                    }
+                }
 
                 // 턴 교체
                 MyPS->bIsMyTurn = false;
@@ -351,25 +376,37 @@ void AIndianPokerGameMode::ProcessBetAction(AIndianPokerCharacter* Player, EPoke
 
 								if (AIndianPokerPlayerController* OppPC = Cast<AIndianPokerPlayerController>(Opponent->GetController()))
 								{
-									OppPC->Client_NotifyYourTurn(Match->CurrentMaxBet - OppPS->CurrentBet);
+									// 비누적식에서는 MaxBet 자체가 다음 사람의 콜 금액
+									OppPC->Client_NotifyYourTurn(Match->CurrentMaxBet);
 								}
-								UE_LOG(LogTemp, Log, TEXT("[Race] 플레이어가 %d개를 추가 베팅. 총 판돈: %d"), ActualAdd, Match->AccumulatedPot);                
+								
+								BroadcastMatchMessage(Match, FString::Printf(TEXT("%s, %d개 레이스!%s"), *Player->NickName, Amount, *AllInMsg));
+
+								UE_LOG(LogTemp, Log, TEXT("[Race] %s님이 %d개 레이스. 총 판돈: %d"), *Player->NickName, ActualAdd, Match->AccumulatedPot);                
             }
         }
         break;
 
     case EPokerBetAction::Call:
         {
-            int32 ToCall = Match->CurrentMaxBet - MyPS->CurrentBet;
-						int32 ActualAdd = FMath::Min(ToCall, MyPS->Chips); // 콜 금액 부족 시 올인
+            // [구조 수정] 이전 사람이 낸 금액(CurrentMaxBet) 만큼 새로 칩 소모
+            int32 ToCall = Match->CurrentMaxBet;
+						int32 ActualAdd = FMath::Min(ToCall, MyPS->Chips);
 
 						MyPS->Chips -= ActualAdd;
-						MyPS->CurrentBet += ActualAdd;
+						MyPS->CurrentBet = ActualAdd;
 						Match->AccumulatedPot += ActualAdd;
+
+						MyPS->AccumulatedPot = Match->AccumulatedPot;
+						OppPS->AccumulatedPot = Match->AccumulatedPot;
+
+						FString AllInMsg = (MyPS->Chips <= 0) ? TEXT(" (올인!)") : TEXT("");
+						BroadcastMatchMessage(Match, FString::Printf(TEXT("%s님이 콜!! %s"), *Player->NickName, *AllInMsg));
 
             DetermineWinnerAndDistributeChips(Match);
         }
         break;
+
 
     case EPokerBetAction::Die:
         {
@@ -415,13 +452,45 @@ bool AIndianPokerGameMode::CheckBattleEnd(FPokerMatch* Match)
 		if (PC1) PC1->Client_ShowBattleResult(FinalWinner == 0 ? 0 : (FinalWinner == 1 ? 1 : 2));
 		if (PC2) PC2->Client_ShowBattleResult(FinalWinner == 0 ? 0 : (FinalWinner == 2 ? 1 : 2));
 
+		// 최종 결과 안내 메세지
+		if (FinalWinner == 0) {
+			BroadcastMatchMessage(Match, TEXT("게임 종료. 최종 결과는 무승부입니다."));
+		} else {
+			AIndianPokerCharacter* FinalWinChar = (FinalWinner == 1) ? Match->Player1 : Match->Player2;
+			BroadcastMatchMessage(Match, FString::Printf(TEXT("배틀 종료! %s 최종 승리"), *FinalWinChar->NickName));
+		}
+
 		Match->Player1->HandleEndBattle();
+
 		return true;
 	}
 
 	return false;
 }
 
+
+void AIndianPokerGameMode::BroadcastMatchMessage(FPokerMatch* Match, const FString& Message)
+{
+	if (!Match) return;
+
+	// 시스템 메세지의 발신자 이름 설정
+	FString SystemName = TEXT("[System]");
+
+	if (Match->Player1)
+	{
+		if (AIndianPokerPlayerController* PC1 = Cast<AIndianPokerPlayerController>(Match->Player1->GetController()))
+		{
+			PC1->Client_ReceiveMatchMessage(-1, SystemName, Message);
+		}
+	}
+	if (Match->Player2)
+	{
+		if (AIndianPokerPlayerController* PC2 = Cast<AIndianPokerPlayerController>(Match->Player2->GetController()))
+		{
+			PC2->Client_ReceiveMatchMessage(-1, SystemName, Message);
+		}
+	}
+}
 
 void AIndianPokerGameMode::RouteMatchChat(AIndianPokerCharacter* Sender, const FString& Message)
 {
@@ -454,3 +523,4 @@ void AIndianPokerGameMode::RouteMatchChat(AIndianPokerCharacter* Sender, const F
         UE_LOG(LogTemp, Log, TEXT("[Private Chat / MatchID: %s] %s: %s"), *Match->MatchID.ToString(), *Sender->NickName, *Message);
     }
 }
+
