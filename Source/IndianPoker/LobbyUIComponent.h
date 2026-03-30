@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
@@ -13,6 +13,14 @@ class INDIANPOKER_API ULobbyUIComponent : public UActorComponent
 
 public:	
 	ULobbyUIComponent();
+
+	/** 로비 기본 HUD를 화면에 띄웁니다. */
+	UFUNCTION(BlueprintCallable, Category = "UI|Lobby")
+	void ShowLobbyUI();
+
+	/** 로비 기본 HUD를 화면에서 숨깁니다. */
+	UFUNCTION(BlueprintCallable, Category = "UI|Lobby")
+	void HideLobbyUI();
 
 	// -------------------------------------------------------
 	// UI 이벤트 (블루프린트에서 구현)

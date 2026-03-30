@@ -1,10 +1,8 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
-#include "IndianPokerPlayerState.h"
+﻿#include "IndianPokerPlayerState.h"
 #include "Net/UnrealNetwork.h"
 #include "IndianPokerPlayerController.h"
 #include "LobbyUIComponent.h"
+#include "InGamePokerUIComponent.h"
 #include "GameFramework/Pawn.h"
 
 AIndianPokerPlayerState::AIndianPokerPlayerState()
@@ -17,6 +15,11 @@ AIndianPokerPlayerState::AIndianPokerPlayerState()
 	SetReplicatingMovement(false); // We don't need to replicate movement for PlayerState
 	
 	CurrentBattleState = EBattleState::Lobby;
+
+	// 인디언 포커 초기값
+	Chips = 20;
+	CurrentBet = 0;
+	bIsMyTurn = false;
 }
 
 void AIndianPokerPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -24,6 +27,10 @@ void AIndianPokerPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AIndianPokerPlayerState, CurrentBattleState);
+	DOREPLIFETIME(AIndianPokerPlayerState, Chips);
+	DOREPLIFETIME(AIndianPokerPlayerState, CurrentBet);
+	DOREPLIFETIME(AIndianPokerPlayerState, bIsMyTurn);
+	DOREPLIFETIME(AIndianPokerPlayerState, AccumulatedPot);
 }
 
 void AIndianPokerPlayerState::OnRep_BattleState()
@@ -47,3 +54,74 @@ void AIndianPokerPlayerState::OnRep_BattleState()
 		}
 	}
 }
+
+void AIndianPokerPlayerState::OnRep_Chips()
+{
+	// 로컬 플레이어 컨트롤러를 찾아서 UI 업데이트
+	if (APlayerController* LocalPC = GetWorld()->GetFirstPlayerController())
+	{
+		if (AIndianPokerPlayerController* PC = Cast<AIndianPokerPlayerController>(LocalPC))
+		{
+			if (PC->PokerUIComp)
+			{
+				// 이 PlayerState가 내 것인지 상대방 것인지 판단
+				if (PC->GetPlayerState<APlayerState>() == this)
+				{
+					PC->PokerUIComp->UpdateMyChipsUI(Chips);
+				}
+				else
+				{
+					PC->PokerUIComp->UpdateOpponentChipsUI(Chips);
+				}
+			}
+		}
+	}
+}
+
+void AIndianPokerPlayerState::OnRep_CurrentBet()
+{
+	if (AIndianPokerPlayerController* PC = Cast<AIndianPokerPlayerController>(GetWorld()->GetFirstPlayerController()))
+	{
+		if (PC->PokerUIComp)
+		{
+			// 내 배팅액인지 상대 배팅액인지 판단하여 UI 업데이트
+			if (PC->GetPlayerState<APlayerState>() == this)
+			{
+				PC->PokerUIComp->UpdateMyBetUI(CurrentBet);
+			}
+			else
+			{
+				PC->PokerUIComp->UpdateOpponentBetUI(CurrentBet);
+			}
+		}
+	}
+}
+
+void AIndianPokerPlayerState::OnRep_AccumulatedPot() {
+	if (APlayerController* LocalPC = GetWorld()->GetFirstPlayerController())
+	{
+		if (AIndianPokerPlayerController* PC = Cast<AIndianPokerPlayerController>(LocalPC))
+		{
+			if (PC->PokerUIComp)
+			{
+				PC->PokerUIComp->UpdatePotUI(AccumulatedPot);
+			}
+		}
+	}
+}
+
+void AIndianPokerPlayerState::OnRep_IsMyTurn()
+{
+	if (APlayerController* LocalPC = GetWorld()->GetFirstPlayerController())
+	{
+		if (AIndianPokerPlayerController* PC = Cast<AIndianPokerPlayerController>(LocalPC))
+		{
+			if (PC->PokerUIComp)
+			{
+				// 이 PlayerState가 내 것인데 bIsMyTurn이 true면 내 턴
+				bool bIsActuallyMyTurn = (PC->GetPlayerState<APlayerState>() == this) ? bIsMyTurn : !bIsMyTurn;
+				PC->PokerUIComp->UpdateTurnUI(bIsActuallyMyTurn);
+			}
+		}
+	}
+} 
