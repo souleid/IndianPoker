@@ -134,44 +134,18 @@ public:
 	UFUNCTION(Client, Reliable, Category = "Battle")
 	void Client_EndBattleTransition();
 
-	// -------------------------------------------------------
-	// Secure Card Distribution (Targeted RPCs)
-	// -------------------------------------------------------
-
-	/** 상대방의 카드 정보만 수신 (내 카드는 숨김) */
-	UFUNCTION(Client, Reliable, Category = "Poker")
-	void Client_ReceiveOpponentCard(uint8 CardValue);
-
-	/** 라운드 종료 시 내 카드와 상대 카드를 모두 공개 */
-	UFUNCTION(Client, Reliable, Category = "Poker")
-	void Client_ShowRoundResult(uint8 MyCard, uint8 OpponentCard, int32 WinnerResult);
-
-	/** 내 턴이 되었음을 알림 (콜에 필요한 칩 개수 포함) */
-	UFUNCTION(Client, Reliable, Category = "Poker")
-	void Client_NotifyYourTurn(int32 AmountToCall);
-
-	// -------------------------------------------------------
-	// Indian Poker Core Logic
-	// -------------------------------------------------------
-
-	/** 베팅하기: 이전 베팅보다 더 많은 칩을 걸 때 호출 */
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Poker")
-	void Server_NetRace(int32 Amount);
+	void Server_ReportTransitionFinished();
 
-	/** 콜: 상대 베팅액과 동일하게 맞추고 승패 판정 */
-	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Poker")
-	void Server_NetCall();
+	/** 라운드 시작 (서버 전용) */
+	void StartPokerRound();
 
-	/** 다이: 기권하여 이번 판을 포기 */
-	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Poker")
-	void Server_NetDie();
+	/** 배틀 종료 실질 로직 (서버/클라이언트 공용 호출 가능하도록 설계) */
+	void HandleEndBattle();
 
 	/** 배틀 기권 또는 최종 종료 시 호출 */
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Poker")
 	void Server_EndBattle();
-
-	/** 라운드 시작 (서버 전용) */
-	void StartPokerRound();
 
 	/** 배틀 카메라 목표 ArmLength (에디터에서 조절 가능) */
 	UPROPERTY(EditAnywhere, Category = "Battle|Camera")
@@ -183,6 +157,10 @@ public:
 	/** 배틀 전환 총 소요 시간 (초) */
 	UPROPERTY(EditAnywhere, Category = "Battle|Camera")
 	float BattleTransitionDuration = 1.2f;
+
+	/** [추가] 배틀 종료 후 로비로 돌아오는 시간 (더 천천히) */
+	UPROPERTY(EditAnywhere, Category = "Battle|Camera")
+	float BattleReturnDuration = 3.0f; // 3초 정도로 넉넉하게 설정
 
 protected:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -200,6 +178,15 @@ private:
 	UPROPERTY(ReplicatedUsing = OnRep_BattleTransitioning)
 	bool bBattleTransitioning = false;
 
+	UPROPERTY(ReplicatedUsing = OnRep_IsTransitionForward)
+	bool bIsTransitionForward = true;
+
+	UPROPERTY(Replicated)
+	float SavedActorYaw = 0.f;
+
+	UFUNCTION()
+	void OnRep_IsTransitionForward();
+
 	UFUNCTION()
 	void OnRep_BattleTransitioning();
 
@@ -210,9 +197,6 @@ private:
 	float   SavedArmLength = 400.f;
 	FRotator SavedBoomRotation = FRotator(-15.f, 0.f, 0.f);
 	FVector  SavedBoomSocketOffset = FVector::ZeroVector;
-
-	/** 전환 시작 시 초기 액터 Yaw (회전 Lerp 기준점) */
-	float SavedActorYaw = 0.f;
 
 	/** Tick에서 호출되는 전환 처리 함수 */
 	void TickBattleTransition(float DeltaTime);

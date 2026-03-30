@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -32,6 +32,10 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_Chips, BlueprintReadOnly, Category = "Poker")
 	int32 Chips;
 
+	/** 인디언 포커: 이번 라운드에 승자가 갈져갈 칩 개수 */
+	UPROPERTY(ReplicatedUsing = OnRep_AccumulatedPot, BlueprintReadOnly, Category = "Poker")
+	int32 AccumulatedPot;
+
 	/** 인디언 포커: 현재 판에 베팅한 칩 개수 */
 	UPROPERTY(ReplicatedUsing = OnRep_CurrentBet, BlueprintReadOnly, Category = "Poker")
 	int32 CurrentBet;
@@ -50,4 +54,7 @@ public:
 
 	UFUNCTION()
 	void OnRep_IsMyTurn();
+
+	UFUNCTION()
+	void OnRep_AccumulatedPot();
 };

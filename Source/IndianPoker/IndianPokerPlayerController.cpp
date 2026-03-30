@@ -1,4 +1,4 @@
-﻿#include "IndianPokerPlayerController.h"
+#include "IndianPokerPlayerController.h"
 
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -89,6 +89,17 @@ void AIndianPokerPlayerController::Client_TransitionToPopupMode_Implementation()
 
 void AIndianPokerPlayerController::Client_TransitionToLobbyMode_Implementation()
 {
+	if (PokerUIComp)
+	{
+		PokerUIComp->HidePokerUI(); // AddToViewport 했던 위젯을 제거합니다.
+	}
+
+	// 2. 로비 UI 복구 및 미처 닫히지 않은 팝업 강제 종료
+	if (LobbyUIComp)
+	{
+		LobbyUIComp->CloseAllLobbyPopups();
+	}
+
 	// 1. 마우스 커서 숨기기
 	bShowMouseCursor = false;
 
@@ -170,3 +181,73 @@ void AIndianPokerPlayerController::Client_ReceiveMatchMessage_Implementation(int
 		PokerUIComp->ShowOpponentAction(Sender, Message, isMine);
 	}
 }
+
+
+void AIndianPokerPlayerController::Server_NetRace_Implementation(int32 Amount)
+{
+	if (AIndianPokerCharacter* MyChar = Cast<AIndianPokerCharacter>(GetPawn()))
+	{
+		if (AIndianPokerGameMode* GM = GetWorld()->GetAuthGameMode<AIndianPokerGameMode>())
+		{
+			GM->ProcessBetAction(MyChar, EPokerBetAction::Race, Amount);
+		}
+	}
+}
+
+void AIndianPokerPlayerController::Server_NetCall_Implementation()
+{
+	if (AIndianPokerCharacter* MyChar = Cast<AIndianPokerCharacter>(GetPawn()))
+	{
+		if (AIndianPokerGameMode* GM = GetWorld()->GetAuthGameMode<AIndianPokerGameMode>())
+		{
+			GM->ProcessBetAction(MyChar, EPokerBetAction::Call);
+		}
+	}
+}
+
+void AIndianPokerPlayerController::Server_NetDie_Implementation()
+{
+	if (AIndianPokerCharacter* MyChar = Cast<AIndianPokerCharacter>(GetPawn()))
+	{
+		if (AIndianPokerGameMode* GM = GetWorld()->GetAuthGameMode<AIndianPokerGameMode>())
+		{
+			GM->ProcessBetAction(MyChar, EPokerBetAction::Die);
+		}
+	}
+}
+
+void AIndianPokerPlayerController::Client_ReceiveOpponentCard_Implementation(uint8 CardValue)
+{
+		if (PokerUIComp)
+		{
+			PokerUIComp->UpdateOpponentCardUI(CardValue);
+		}
+}
+
+void AIndianPokerPlayerController::Client_ShowRoundResult_Implementation(uint8 MyCard, uint8 OpponentCard, int32 WinnerResult)
+{
+		if (PokerUIComp)
+		{
+			PokerUIComp->ShowRoundResult(MyCard, OpponentCard, WinnerResult);
+		}
+}
+
+void AIndianPokerPlayerController::Client_ShowBattleResult_Implementation(int32 WinnerResult)
+{
+	if (PokerUIComp)
+	{
+		PokerUIComp->ShowBattleResult(WinnerResult);
+	}
+}
+
+
+void AIndianPokerPlayerController::Client_NotifyYourTurn_Implementation(int32 AmountToCall)
+{
+	if (PokerUIComp)
+		{
+			// UI 컴포넌트에 턴 시작 알림 (필요한 콜 금액 전달)
+		  PokerUIComp->NotifyRequiredCallAmount(AmountToCall);
+			PokerUIComp->UpdateTurnUI(true);
+		}
+}
+

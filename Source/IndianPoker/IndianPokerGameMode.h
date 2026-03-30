@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -29,6 +29,9 @@ struct FPokerMatch
 	class AIndianPokerCharacter* Player2 = nullptr;
 
 	UPROPERTY()
+	int32 ReadyPlayersCount = 0;
+
+	UPROPERTY()
 	TArray<uint8> Deck;
 
 	UPROPERTY()
@@ -36,7 +39,7 @@ struct FPokerMatch
 
 	/** 이번 라운드 최고 베팅액 (콜 기준점) */
 	UPROPERTY()
-	int32 CurrentMaxBet = 1;
+	int32 CurrentMaxBet = 0;
 
 	UPROPERTY()
     int32 AccumulatedPot = 0;
@@ -73,6 +76,9 @@ public:
 	/** 매치 종료 및 삭제 */
 	void RemoveMatch(const class AIndianPokerCharacter* Player);
 
+	/** 매치 시작 애니메이션 종료 및 레디**/
+	void NotifyPlayerReady(AIndianPokerCharacter* Player);
+
 	/** 인디언 포커: 라운드 시작 진행 (서버 전용) */
 	void StartPokerMatchRound(class AIndianPokerCharacter* Player);
 
@@ -92,6 +98,8 @@ public:
 	void ProcessBetAction(class AIndianPokerCharacter* Player, EPokerBetAction Action, int32 Amount = 0);
 
 	void RouteMatchChat(class AIndianPokerCharacter* Sender, const FString& Message);
+
+	bool CheckBattleEnd(FPokerMatch* Match);
 private:
 	/** 진행 중인 모든 매치 리스트 */
 	UPROPERTY()

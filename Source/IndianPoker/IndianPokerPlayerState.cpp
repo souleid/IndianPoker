@@ -1,4 +1,4 @@
-#include "IndianPokerPlayerState.h"
+﻿#include "IndianPokerPlayerState.h"
 #include "Net/UnrealNetwork.h"
 #include "IndianPokerPlayerController.h"
 #include "LobbyUIComponent.h"
@@ -30,6 +30,7 @@ void AIndianPokerPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 	DOREPLIFETIME(AIndianPokerPlayerState, Chips);
 	DOREPLIFETIME(AIndianPokerPlayerState, CurrentBet);
 	DOREPLIFETIME(AIndianPokerPlayerState, bIsMyTurn);
+	DOREPLIFETIME(AIndianPokerPlayerState, AccumulatedPot);
 }
 
 void AIndianPokerPlayerState::OnRep_BattleState()
@@ -70,7 +71,7 @@ void AIndianPokerPlayerState::OnRep_Chips()
 				}
 				else
 				{
-					//PC->PokerUIComp->UpdateOpponentChipsUI(Chips);
+					PC->PokerUIComp->UpdateOpponentChipsUI(Chips);
 				}
 			}
 		}
@@ -79,15 +80,31 @@ void AIndianPokerPlayerState::OnRep_Chips()
 
 void AIndianPokerPlayerState::OnRep_CurrentBet()
 {
-	// 전적 판돈(Pot)은 보통 GameState에서 관리하는 게 좋으나, 
-	// 여기서는 양쪽 PlayerState의 CurrentBet 합산으로 UI에 표시할 수 있음
+	if (AIndianPokerPlayerController* PC = Cast<AIndianPokerPlayerController>(GetWorld()->GetFirstPlayerController()))
+	{
+		if (PC->PokerUIComp)
+		{
+			// 내 배팅액인지 상대 배팅액인지 판단하여 UI 업데이트
+			if (PC->GetPlayerState<APlayerState>() == this)
+			{
+				PC->PokerUIComp->UpdateMyBetUI(CurrentBet);
+			}
+			else
+			{
+				PC->PokerUIComp->UpdateOpponentBetUI(CurrentBet);
+			}
+		}
+	}
+}
+
+void AIndianPokerPlayerState::OnRep_AccumulatedPot() {
 	if (APlayerController* LocalPC = GetWorld()->GetFirstPlayerController())
 	{
 		if (AIndianPokerPlayerController* PC = Cast<AIndianPokerPlayerController>(LocalPC))
 		{
 			if (PC->PokerUIComp)
 			{
-				// 일단 개별 베팅액 업데이트 이벤트를 호출 (필요 시 UpdatePotUI 사용)
+				PC->PokerUIComp->UpdatePotUI(AccumulatedPot);
 			}
 		}
 	}
@@ -107,4 +124,4 @@ void AIndianPokerPlayerState::OnRep_IsMyTurn()
 			}
 		}
 	}
-}
+} 
